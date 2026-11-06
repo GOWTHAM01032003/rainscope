@@ -30,6 +30,44 @@ def test_unknown_hosts_are_rejected_by_the_api():
     assert response.status_code == 400
 
 
+def test_render_and_local_probe_hosts_are_allowed_without_wildcards():
+    from fastapi import FastAPI
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+    from starlette.responses import JSONResponse
+    from starlette.testclient import TestClient as StarletteTestClient
+
+    from backend.app.main import trusted_host_allowlist
+
+    hosts = trusted_host_allowlist({"RENDER_EXTERNAL_HOSTNAME": "rainscope-api.onrender.com"})
+    assert {"rainscope-api.onrender.com", "127.0.0.1", "localhost", "testserver"}.issubset(hosts)
+    assert "*" not in hosts
+    import pytest
+    with pytest.raises(RuntimeError, match="wildcard hosts are not allowed"):
+        trusted_host_allowlist({"RAINSCOPE_ALLOWED_HOSTS": "*"})
+
+    probe_app = FastAPI()
+
+    @probe_app.get("/api/health")
+    def probe_health():
+        return JSONResponse({"status": "ok", "service": "rainscope-api"})
+
+    guarded_probe = TrustedHostMiddleware(probe_app, allowed_hosts=hosts)
+    probe_client = StarletteTestClient(guarded_probe, base_url="http://testserver")
+    for hostname in ("rainscope-api.onrender.com", "127.0.0.1", "localhost", "testserver"):
+        assert probe_client.get("/api/health", headers={"host": hostname}).status_code == 200
+    assert probe_client.get("/api/health", headers={"host": "untrusted.invalid"}).status_code == 400
+
+
+def test_health_is_live_with_an_empty_forecast_cache(monkeypatch):
+    monkeypatch.setattr(main.store, "cached_forecasts", lambda **_kwargs: [])
+    health = client.get("/api/health")
+    assert health.status_code == 200
+    assert health.json() == {"status": "ok", "service": "rainscope-api"}
+    availability = client.get("/api/availability")
+    assert availability.status_code == 200
+    assert availability.json()["entries"] == []
+
+
 def test_timezone_lookup_returns_offline_iana_zone_without_forwarding_coordinates(monkeypatch):
     seen = []
     monkeypatch.setattr(main, "timezones_for_coordinates", lambda lat, lon: seen.append((lat, lon)) or ("Asia/Kolkata",))

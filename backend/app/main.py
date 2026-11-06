@@ -21,9 +21,19 @@ from .timezones import TimezoneLookupUnavailable, timezones_for_coordinates
 
 
 app = FastAPI(title="RainScope API", version="0.1.0")
-allowed_hosts = [host.strip() for host in os.getenv("RAINSCOPE_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
-if not allowed_hosts or "*" in allowed_hosts:
-    raise RuntimeError("RAINSCOPE_ALLOWED_HOSTS must contain explicit host names; wildcard hosts are not allowed.")
+
+
+def trusted_host_allowlist(environ: dict[str, str] | None = None) -> list[str]:
+    values = os.environ if environ is None else environ
+    configured = [host.strip() for host in values.get("RAINSCOPE_ALLOWED_HOSTS", "").split(",") if host.strip()]
+    render_hostname = values.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+    allowed_hosts = list(dict.fromkeys([*configured, "localhost", "127.0.0.1", "testserver", *([render_hostname] if render_hostname else [])]))
+    if "*" in allowed_hosts:
+        raise RuntimeError("RAINSCOPE_ALLOWED_HOSTS must contain explicit host names; wildcard hosts are not allowed.")
+    return allowed_hosts
+
+
+allowed_hosts = trusted_host_allowlist()
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 cors_origins = [origin.strip().rstrip("/") for origin in os.getenv("RAINSCOPE_CORS_ORIGINS", "").split(",") if origin.strip()]
 if "*" in cors_origins:
