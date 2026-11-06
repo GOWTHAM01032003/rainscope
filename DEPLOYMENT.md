@@ -1,6 +1,14 @@
 # RainScope deployment guide
 
-This project includes a local production image setup; it does not deploy itself or provide hosting, TLS, ECMWF, tile, or geocoding service guarantees. The deployment is two containers: FastAPI/eccodes and an Nginx static frontend. Nginx serves the React single-page app, routes same-origin `/api` requests to FastAPI, and falls back to `index.html` on deep links. The API runs one worker so its in-process download locks remain effective. A named volume stores validated GRIBs and derived rasters.
+This project includes a local production image setup and a Render Blueprint; it does not provide hosting, ECMWF, tile, or geocoding service guarantees. Local Compose runs two containers: FastAPI/ecCodes and an Nginx static frontend. Nginx serves the React single-page app, routes same-origin `/api` requests to FastAPI, and falls back to `index.html` on deep links. The API runs one worker so its in-process download locks remain effective. A named volume stores validated GRIBs and derived rasters.
+
+## Render Free Blueprint
+
+The root `render.yaml` defines two Free services in Singapore: a Docker FastAPI/ecCodes web service and a static Vite frontend. The frontend build gets the API's public HTTPS URL through a Blueprint service reference; FastAPI gets the static site's exact origin for GET-only CORS and its own assigned hostname for trusted-host validation. Render's web service injects `PORT`; the API image binds to that port (defaulting to 8000 for local Compose). The static site has an SPA rewrite to `index.html` for direct routes and refreshes. No Render secrets or paid resources are required.
+
+To deploy, connect the public GitHub repository in Render, choose **New → Blueprint**, select `GOWTHAM01032003/rainscope` on `main`, review that both services show the **Free** plan, and apply the Blueprint. Render must be authorized to access this repository. Do not add a persistent disk: it is not available to Free web services. The API cache is set to `/tmp/rainscope-cache` and is ephemeral; it may be lost when the instance sleeps, restarts, or redeploys. After a cold start, availability can therefore be empty until a user requests a run and ECMWF returns a GRIB that passes validation. A sleep/wake response may take about a minute. Free web services have limited CPU/RAM and can sleep after inactivity; GRIB decoding and upstream retrieval may be slow or exceed the free instance's resources. Render gives no service uptime guarantee on this plan.
+
+After Render finishes both deployments, verify the frontend root and a deep link, then verify the API service's `/api/health`, `/api/ready`, and `/api/availability`. A live forecast is verified only after requesting a currently available run and receiving a real GRIB that passes RainScope's metadata checks; cached data in a different environment is not proof that the deployed cache contains it.
 
 ## Requirements
 
