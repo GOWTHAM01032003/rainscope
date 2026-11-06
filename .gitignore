@@ -1,0 +1,15 @@
+.venv/
+node_modules/
+dist/
+__pycache__/
+.pytest_cache/
+.coverage
+.env
+.env.*
+!.env.example
+.agents/
+.aws/
+.codex/
+.rainscope-git/
+data/cache/
+**/data/cache/

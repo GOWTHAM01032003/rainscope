@@ -1,0 +1,44 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      RAINSCOPE_CACHE_DIR: /data/cache
+      RAINSCOPE_ALLOWED_HOSTS: ${RAINSCOPE_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      RAINSCOPE_CORS_ORIGINS: ${RAINSCOPE_CORS_ORIGINS:-}
+      ECMWF_SOURCE: ${ECMWF_SOURCE:-ecmwf}
+    volumes:
+      - forecast-cache:/data/cache
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,sys,urllib.request; r=json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/ready', timeout=3)); sys.exit(0 if r.get('status')=='ready' and r.get('cache_available') is True else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_BASEMAP_STYLE_URL: ${VITE_BASEMAP_STYLE_URL:-}
+        VITE_BASEMAP_TILE_URL: ${VITE_BASEMAP_TILE_URL:-}
+        VITE_BASEMAP_ATTRIBUTION: ${VITE_BASEMAP_ATTRIBUTION:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${RAINSCOPE_BIND_ADDRESS:-127.0.0.1}:${RAINSCOPE_HTTP_PORT:-8080}:8080"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  forecast-cache:

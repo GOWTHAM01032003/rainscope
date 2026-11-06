@@ -1,0 +1,8 @@
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+ecmwf-opendata==0.3.35
+eccodes==2.50.0
+numpy==2.5.4
+pillow==13.0.0
+timezonefinder==9.2.0
+timezonefinder-data==4.2026.5
